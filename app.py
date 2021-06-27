@@ -213,11 +213,65 @@ def stop_following(follow_id):
     return redirect(f"/users/{g.user.id}/following")
 
 
+@app.route('/users/<int:user_id>/likes', methods=["GET"])
+def show_likes(user_id):
+    if not g.user:
+        flash("Access Denied", "danger")
+        return redirect("/")
+
+    user = User.query.get_or_404(user_id)
+    return render_template('users/likes.html', user=user, likes=user.likes)
+
+
+@app.route('/messages/<int:message_id>/like', methods=['POST'])
+def add_like(message_id):
+    """toggle the like on a post"""
+
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+
+    liked_message = Message.query.get_or_404(message_id)
+    if liked_message.user_id == g.user.id:
+        return abort(403)
+
+    user_likes = g.user.likes
+
+    if liked_message in user_likes:
+        g.user.likes = [like for like in user_likes if like != liked_message]
+    else:
+        g.user.likes.append(liked_message)
+
+    db.session.commit()
+
+    return redirect("/")
+
+
 @app.route('/users/profile', methods=["GET", "POST"])
-def profile():
+def edit_profile():
     """Update profile for current user."""
 
-    # IMPLEMENT THIS
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+
+    user = g.user
+    form = UserEditForm(obj=user)
+
+    if form.validate_on_submit():
+        if User.authenticate(user.username, form.password.data):
+            user.username = form.username.data
+            user.email = form.email.data
+            user.image_url = form.image_url.data or "/static/images/default-pic.png"
+            user.header_image_url = form.header_image_url.data or "/static/images/warbler-hero.jpg"
+            user.bio = form.bio.data
+
+            db.session.commit()
+            return redirect(f"/users/{user.id}")
+
+        flash("Incorrect password, try again or be punished!", 'danger')
+
+    return render_template('users/edit.html', form=form, user_id=user.id)
 
 
 @app.route('/users/delete', methods=["POST"])
